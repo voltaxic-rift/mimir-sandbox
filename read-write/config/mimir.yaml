@@ -1,0 +1,51 @@
+target: xxx
+
+common:
+  storage:
+    backend: s3
+    s3:
+      endpoint: minio:9000
+      access_key_id: mimir
+      secret_access_key: supersecret
+      insecure: true
+      bucket_name: mimir
+
+blocks_storage:
+  storage_prefix: blocks
+  tsdb:
+    dir: /data/ingester
+
+memberlist:
+  join_members:
+    - mimir-read-1
+    - mimir-read-2
+    - mimir-read-3
+    - mimir-write-1
+    - mimir-write-2
+    - mimir-write-3
+    - mimir-backend-1
+    - mimir-backend-2
+    - mimir-backend-3
+
+alertmanager:
+  data_dir: /data/alertmanager
+  fallback_config_file: /etc/alertmanager-fallback-config.yaml
+  external_url: http://localhost:9009/alertmanager
+
+ruler:
+  rule_path: /data/ruler
+  alertmanager_url: http://127.0.0.1:8080/alertmanager
+  ring:
+    # Quickly detect unhealthy rulers to speed up the tutorial.
+    heartbeat_period: 2s
+    heartbeat_timeout: 10s
+
+server:
+  log_level: warn
+
+limits:
+  ingestion_rate: 100000
+  max_global_series_per_user: 0
+  max_global_series_per_metric: 0
+  max_fetched_series_per_query: 5000
+  max_fetched_chunk_bytes_per_query: 128000000

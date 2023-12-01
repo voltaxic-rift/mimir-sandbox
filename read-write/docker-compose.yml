@@ -1,0 +1,183 @@
+version: '3.4'
+
+services:
+
+  minio:
+    image: minio/minio:latest
+    entrypoint: [""]
+    command: ["sh", "-c", "mkdir -p /data/mimir && minio server --quiet /data"]
+    environment:
+      - MINIO_ROOT_USER=mimir
+      - MINIO_ROOT_PASSWORD=supersecret
+    volumes:
+      - ./data/minio:/data
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_USERS_DEFAULT_THEME=light
+      - GF_LOG_MODE=console
+      - GF_LOG_LEVEL=critical
+    volumes:
+      - ./config/grafana-provisioning-dashboards.yaml:/etc/grafana/provisioning/dashboards/provisioning-dashboards.yaml:ro
+      - ./config/grafana-provisioning-datasources.yaml:/etc/grafana/provisioning/datasources/provisioning-datasources.yaml:ro
+      # Explicitly list the dashboards we want to show in the demo. We intentionally exclude dashboards that require
+      # Kubernetes metrics (eg. resources or networking) and other services not available in the demo (eg. Grafana Loki).
+      - ./dashboards/mimir-alertmanager.json:/var/lib/grafana/dashboards/mimir-alertmanager.json:ro
+      - ./dashboards/mimir-compactor.json:/var/lib/grafana/dashboards/mimir-compactor.json:ro
+      - ./dashboards/mimir-object-store.json:/var/lib/grafana/dashboards/mimir-object-store.json:ro
+      - ./dashboards/mimir-overrides.json:/var/lib/grafana/dashboards/mimir-overrides.json:ro
+      - ./dashboards/mimir-queries.json:/var/lib/grafana/dashboards/mimir-queries.json:ro
+      - ./dashboards/mimir-reads.json:/var/lib/grafana/dashboards/mimir-reads.json:ro
+      - ./dashboards/mimir-ruler.json:/var/lib/grafana/dashboards/mimir-ruler.json:ro
+      - ./dashboards/mimir-tenants.json:/var/lib/grafana/dashboards/mimir-tenants.json:ro
+      - ./dashboards/mimir-top-tenants.json:/var/lib/grafana/dashboards/mimir-top-tenants.json:ro
+      - ./dashboards/mimir-writes.json:/var/lib/grafana/dashboards/mimir-writes.json:ro
+      - ./dashboards/cadvisor.json:/var/lib/grafana/dashboards/cadvisor.json:ro
+    ports:
+      - 9000:3000
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --log.level=error
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+    volumes:
+      - ./config/prometheus.yaml:/etc/prometheus/prometheus.yml
+      - ./rules.yaml:/etc/prometheus/rules.yaml
+    depends_on:
+      - mimir-read-1
+      - mimir-read-2
+      - mimir-read-3
+      - mimir-write-1
+      - mimir-write-2
+      - mimir-write-3
+      - mimir-backend-1
+      - mimir-backend-2
+      - mimir-backend-3
+      - cadvisor
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    privileged: true
+    ports:
+      - 8080:8080
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+
+  load-balancer:
+    image: nginx:latest
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - mimir-read-1
+      - mimir-read-2
+      - mimir-read-3
+      - mimir-write-1
+      - mimir-write-2
+      - mimir-write-3
+      - mimir-backend-1
+      - mimir-backend-2
+      - mimir-backend-3
+    ports:
+      - 9009:9009
+      - 9010:9010
+      - 9011:9011
+
+  mimir-read-1:
+    image: grafana/mimir:latest
+    command: ["-config.file=/etc/mimir-read.yaml"]
+    hostname: mimir-read-1
+    depends_on:
+      - minio
+    volumes:
+      - ./config/mimir-read.yaml:/etc/mimir-read.yaml
+      - ./data/mimir-read-1:/data
+  mimir-read-2:
+    image: grafana/mimir:latest
+    command: ["-config.file=/etc/mimir-read.yaml"]
+    hostname: mimir-read-2
+    depends_on:
+      - minio
+    volumes:
+      - ./config/mimir-read.yaml:/etc/mimir-read.yaml
+      - ./data/mimir-read-2:/data
+  mimir-read-3:
+    image: grafana/mimir:latest
+    command: ["-config.file=/etc/mimir-read.yaml"]
+    hostname: mimir-read-3
+    depends_on:
+      - minio
+    volumes:
+      - ./config/mimir-read.yaml:/etc/mimir-read.yaml
+      - ./data/mimir-read-3:/data
+
+  mimir-write-1:
+    image: grafana/mimir:latest
+    command: ["-config.file=/etc/mimir-write.yaml"]
+    hostname: mimir-write-1
+    depends_on:
+      - minio
+    volumes:
+      - ./config/mimir-write.yaml:/etc/mimir-write.yaml
+      - ./data/mimir-write-1:/data
+  mimir-write-2:
+    image: grafana/mimir:latest
+    command: ["-config.file=/etc/mimir-write.yaml"]
+    hostname: mimir-write-2
+    depends_on:
+      - minio
+    volumes:
+      - ./config/mimir-write.yaml:/etc/mimir-write.yaml
+      - ./data/mimir-write-2:/data
+  mimir-write-3:
+    image: grafana/mimir:latest
+    command: ["-config.file=/etc/mimir-write.yaml"]
+    hostname: mimir-write-3
+    depends_on:
+      - minio
+    volumes:
+      - ./config/mimir-write.yaml:/etc/mimir-write.yaml
+      - ./data/mimir-write-3:/data
+
+  mimir-backend-1:
+    image: grafana/mimir:latest
+    command: ["-config.file=/etc/mimir-backend.yaml"]
+    hostname: mimir-backend-1
+    depends_on:
+      - minio
+    volumes:
+      - ./config/mimir-backend.yaml:/etc/mimir-backend.yaml
+      - ./config/alertmanager-fallback-config.yaml:/etc/alertmanager-fallback-config.yaml
+      - ./data/mimir-backend-1:/data
+  mimir-backend-2:
+    image: grafana/mimir:latest
+    command: ["-config.file=/etc/mimir-backend.yaml"]
+    hostname: mimir-backend-2
+    depends_on:
+      - minio
+    volumes:
+      - ./config/mimir-backend.yaml:/etc/mimir-backend.yaml
+      - ./config/alertmanager-fallback-config.yaml:/etc/alertmanager-fallback-config.yaml
+      - ./data/mimir-backend-2:/data
+  mimir-backend-3:
+    image: grafana/mimir:latest
+    command: ["-config.file=/etc/mimir-backend.yaml"]
+    hostname: mimir-backend-3
+    depends_on:
+      - minio
+    volumes:
+      - ./config/mimir-backend.yaml:/etc/mimir-backend.yaml
+      - ./config/alertmanager-fallback-config.yaml:/etc/alertmanager-fallback-config.yaml
+      - ./data/mimir-backend-3:/data

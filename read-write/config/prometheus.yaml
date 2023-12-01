@@ -1,0 +1,51 @@
+global:
+  scrape_interval: 5s
+  external_labels:
+    cluster: demo
+    namespace: demo
+
+rule_files:
+  - /etc/prometheus/rules.yaml
+
+scrape_configs:
+  - job_name: demo/mimir
+    static_configs:
+      - targets: ["mimir-read-1:8080"]
+        labels:
+          pod: "mimir-read-1"
+      - targets: ["mimir-read-2:8080"]
+        labels:
+          pod: "mimir-read-2"
+      - targets: ["mimir-read-3:8080"]
+        labels:
+          pod: "mimir-read-3"
+      - targets: ["mimir-write-1:8080"]
+        labels:
+          pod: "mimir-write-1"
+      - targets: ["mimir-write-2:8080"]
+        labels:
+          pod: "mimir-write-2"
+      - targets: ["mimir-write-3:8080"]
+        labels:
+          pod: "mimir-write-3"
+      - targets: ["mimir-backend-1:8080"]
+        labels:
+          pod: "mimir-backend-1"
+      - targets: ["mimir-backend-2:8080"]
+        labels:
+          pod: "mimir-backend-2"
+      - targets: ["mimir-backend-3:8080"]
+        labels:
+          pod: "mimir-backend-3"
+  - job_name: demo/cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+  - job_name: demo/prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+remote_write:
+  - url: http://load-balancer:9011/api/v1/push
+    # Add X-Scope-OrgID header so that Mimir knows what tenant the remote write data should be stored in.
+    # In this case, our tenant is "demo"
+    headers:
+      X-Scope-OrgID: demo

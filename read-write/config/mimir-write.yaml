@@ -1,0 +1,38 @@
+target: write
+
+common:
+  storage:
+    backend: s3
+    s3:
+      endpoint: minio:9000
+      access_key_id: mimir
+      secret_access_key: supersecret
+      insecure: true
+      bucket_name: mimir
+
+blocks_storage:
+  storage_prefix: blocks
+  tsdb:
+    dir: /data/ingester
+
+memberlist:
+  join_members:
+    - mimir-read-1
+    - mimir-read-2
+    - mimir-read-3
+    - mimir-write-1
+    - mimir-write-2
+    - mimir-write-3
+    - mimir-backend-1
+    - mimir-backend-2
+    - mimir-backend-3
+
+server:
+  log_level: warn
+
+limits:
+  ingestion_rate: 100000
+  max_global_series_per_user: 0
+  max_global_series_per_metric: 0
+  max_fetched_series_per_query: 5000
+  max_fetched_chunk_bytes_per_query: 128000000
